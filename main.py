@@ -1,6 +1,7 @@
 import os
 import requests
 import asyncio
+import time
 import edge_tts
 import google.generativeai as genai
 from moviepy.editor import *
@@ -14,11 +15,32 @@ CLIENT_ID = os.environ['YT_CLIENT_ID']
 CLIENT_SECRET = os.environ['YT_CLIENT_SECRET']
 REFRESH_TOKEN = os.environ['YT_REFRESH_TOKEN']
 
-# 2. Génération du script avec Gemini (en anglais pour le public US)
+# 2. Génération du script avec Gemini (avec gestion du quota)
 genai.configure(api_key=GEMINI_KEY)
-model = genai.GenerativeModel('gemini-3.8-flash')
+
+# On utilise un modèle avec un quota gratuit plus généreux
+MODEL_NAME = 'gemini-3.1-flash-lite' 
+model = genai.GenerativeModel(MODEL_NAME)
+
 prompt = "Write a very short, engaging script (max 25 words) about a beginner finance tip. Give only the text, no intro."
-script_text = model.generate_content(prompt).text.strip()
+
+# Mécanisme de sécurité pour réessayer en cas de surcharge temporaire
+max_retries = 3
+for attempt in range(max_retries):
+    try:
+        response = model.generate_content(prompt)
+        script_text = response.text.strip()
+        break
+    except Exception as e:
+        if "429" in str(e) or "quota" in str(e).lower():
+            print(f"Quota atteint (tentative {attempt + 1}/{max_retries}). Attente de 60 secondes...")
+            time.sleep(60)
+        else:
+            raise e
+else:
+    raise Exception("Impossible de générer le script après plusieurs tentatives. Quota probablement épuisé pour aujourd'hui.")
+
+print(f"Script généré : {script_text}")
 
 # 3. Création de la voix off (TTS)
 async def make_audio():
@@ -63,4 +85,4 @@ body = {
 media = MediaFileUpload("short.mp4", mimetype='video/mp4', resumable=True)
 request = youtube.videos().insert(part='snippet,status', body=body, media_body=media)
 request.execute()
-print("Vidéo publiée avec succès !")
+print("Vidéo publiée avec succès sur YouTube ! 🚀")
