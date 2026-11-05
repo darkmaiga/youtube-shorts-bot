@@ -16,7 +16,7 @@ REFRESH_TOKEN = os.environ['YT_REFRESH_TOKEN']
 
 # 2. Génération du script avec Gemini (en anglais pour le public US)
 genai.configure(api_key=GEMINI_KEY)
-model = genai.GenerativeModel('gemini-1.5-flash')
+model = genai.GenerativeModel('gemini-2.5-flash')
 prompt = "Write a very short, engaging script (max 25 words) about a beginner finance tip. Give only the text, no intro."
 script_text = model.generate_content(prompt).text.strip()
 
