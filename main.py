@@ -42,7 +42,7 @@ def get_background_video():
     url = f"https://pixabay.com/api/videos/?key={PIXABAY_KEY}&q={query}&video_type=film&orientation=vertical&per_page=5"
     response = requests.get(url).json()
     
-    if response['hits']:
+    if response.get('hits'):
         video_url = response['hits'][0]['videos']['large']['url']
         print(f"Vidéo trouvée : {video_url}")
         vid_data = requests.get(video_url).content
@@ -94,8 +94,8 @@ for sentence in sentences:
     word_count = len(sentence.split())
     sentence_duration = word_count * time_per_word
     
-    # Création du clip de texte
-    txt_clip = TextClip(wrapped_text, fontsize=70, color='white', font='Arial-Bold', 
+    # Création du clip de texte avec la police Linux
+    txt_clip = TextClip(wrapped_text, fontsize=70, color='white', font='DejaVu-Sans-Bold', 
                         stroke_color='black', stroke_width=3, method='caption', size=(900, None))
     txt_clip = txt_clip.set_position(('center', 'center')).set_start(current_time).set_duration(sentence_duration)
     subtitles.append(txt_clip)
