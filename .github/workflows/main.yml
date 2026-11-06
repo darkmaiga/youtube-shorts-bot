@@ -17,7 +17,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y imagemagick
       - name: Fix ImageMagick Policy for TextClip
         run: |
-          sudo sed -i '/<policy domain="path" rights="none" pattern="@\*"\/>/d' /etc/ImageMagick-6/policy.xml
+          sudo sed -i 's/<policy domain="path" rights="none" pattern="@\*"\/>//' /etc/ImageMagick-6/policy.xml || true
       - name: Install dependencies
         run: |
           sudo apt-get install -y ffmpeg
