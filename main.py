@@ -5,6 +5,7 @@ import time
 import edge_tts
 import google.generativeai as genai
 from moviepy.editor import *
+from moviepy.editor import vfx
 from google.oauth2.credentials import Credentials
 from googleapiclient.http import MediaFileUpload
 from googleapiclient.discovery import build
@@ -57,7 +58,14 @@ if not get_background_video():
     with open("background.jpg", "wb") as handler:
         handler.write(img_data)
 
-# 5. Fonction pour créer une image de texte avec Pillow (sans ImageMagick)
+# 5. Téléchargement de la musique de fond (libre de droits)
+# On utilise une URL directe vers un morceau d'ambiance corporate
+music_url = "https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0c6ff1bab.mp3?filename=corporate-motivation-110181.mp3"
+music_data = requests.get(music_url).content
+with open("music.mp3", "wb") as handler:
+    handler.write(music_data)
+
+# 6. Fonction pour créer une image de texte avec Pillow
 def create_text_image(text, filename="temp_text.png"):
     img_width = 1080
     img_height = 1920
@@ -86,10 +94,11 @@ def create_text_image(text, filename="temp_text.png"):
     img.save(filename)
     return filename
 
-# 6. Montage vidéo
-audio = AudioFileClip("audio.mp3")
-duration = audio.duration
+# 7. Montage vidéo
+voice_audio = AudioFileClip("audio.mp3")
+duration = voice_audio.duration
 
+# Préparation de la vidéo de fond
 if os.path.exists("background.mp4"):
     bg_clip = VideoFileClip("background.mp4")
     bg_clip = bg_clip.resize(height=1920)
@@ -102,8 +111,21 @@ else:
         bg_clip = bg_clip.resize(width=1080)
     bg_clip = bg_clip.crop(x_center=bg_clip.w/2, y_center=bg_clip.h/2, width=1080, height=1920)
 
+# On boucle la vidéo pour qu'elle dure le temps de l'audio
 bg_clip = bg_clip.loop(duration=duration)
 
+# 👉 APPLICATION DU FILTRE SOMBRE (On réduit la luminosité à 60%)
+bg_clip = bg_clip.fx(vfx.colorx, 0.6)
+
+# Préparation de la musique de fond
+music = AudioFileClip("music.mp3")
+# On boucle la musique et on baisse son volume à 10% (0.1) pour ne pas couvrir la voix
+music = music.loop(duration=duration).volumex(0.1)
+
+# On mélange la voix et la musique
+final_audio = CompositeAudioClip([voice_audio, music])
+
+# Création des sous-titres
 sentences = script_text.replace('\n', ' ').split('. ')
 words = script_text.split()
 time_per_word = duration / len(words)
@@ -119,17 +141,17 @@ for sentence in sentences:
     word_count = len(sentence.split())
     sentence_duration = word_count * time_per_word
     
-    # Utilisation de Pillow pour générer le texte au lieu de TextClip
     text_img_file = create_text_image(wrapped_text)
     txt_clip = ImageClip(text_img_file).set_start(current_time).set_duration(sentence_duration)
     subtitles.append(txt_clip)
     
     current_time += sentence_duration
 
-video = CompositeVideoClip([bg_clip] + subtitles).set_audio(audio)
+# Assemblage final
+video = CompositeVideoClip([bg_clip] + subtitles).set_audio(final_audio)
 video.write_videofile("short.mp4", fps=24, codec="libx264", audio_codec="aac", preset="ultrafast")
 
-# 7. Upload sur YouTube
+# 8. Upload sur YouTube
 creds = Credentials(
     None,
     refresh_token=REFRESH_TOKEN,
