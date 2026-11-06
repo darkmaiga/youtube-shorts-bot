@@ -10,6 +10,7 @@ from googleapiclient.http import MediaFileUpload
 from googleapiclient.discovery import build
 import textwrap
 import random
+from PIL import Image, ImageDraw, ImageFont
 
 # 1. Récupération des clés
 GEMINI_KEY = os.environ['GEMINI_API_KEY']
@@ -18,7 +19,7 @@ CLIENT_ID = os.environ['YT_CLIENT_ID']
 CLIENT_SECRET = os.environ['YT_CLIENT_SECRET']
 REFRESH_TOKEN = os.environ['YT_REFRESH_TOKEN']
 
-# 2. Génération du script (environ 150 mots pour 1 min 30)
+# 2. Génération du script
 genai.configure(api_key=GEMINI_KEY)
 model = genai.GenerativeModel('gemini-3.1-flash-lite')
 prompt = """
@@ -28,14 +29,13 @@ Write in English. Give only the text, no intro, no outro, no formatting.
 script_text = model.generate_content(prompt).text.strip()
 print(f"Script généré :\n{script_text}\n")
 
-# 3. Création de la voix off (voix d'homme)
+# 3. Création de la voix off
 async def make_audio():
-    # Voix masculine plus autoritaire
     communicate = edge_tts.Communicate(script_text, "en-US-ChristopherNeural")
     await communicate.save("audio.mp3")
 asyncio.run(make_audio())
 
-# 4. Téléchargement d'une vidéo de fond (Pixabay)
+# 4. Téléchargement de la vidéo de fond (Pixabay)
 def get_background_video():
     keywords = ["finance", "money", "business", "office", "city"]
     query = random.choice(keywords)
@@ -57,14 +57,41 @@ if not get_background_video():
     with open("background.jpg", "wb") as handler:
         handler.write(img_data)
 
-# 5. Montage vidéo (Format Short 1080x1920 avec sous-titres)
+# 5. Fonction pour créer une image de texte avec Pillow (sans ImageMagick)
+def create_text_image(text, filename="temp_text.png"):
+    img_width = 1080
+    img_height = 1920
+    img = Image.new('RGBA', (img_width, img_height), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    
+    font_size = 80
+    try:
+        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
+    except IOError:
+        font = ImageFont.load_default()
+        
+    lines = textwrap.wrap(text, width=20)
+    total_height = len(lines) * (font_size + 20)
+    y_start = (img_height - total_height) / 2
+    
+    for i, line in enumerate(lines):
+        bbox = draw.textbbox((0, 0), line, font=font)
+        w = bbox[2] - bbox[0]
+        x = (img_width - w) / 2
+        y = y_start + i * (font_size + 20)
+        
+        # Dessiner le contour noir puis le texte blanc
+        draw.text((x, y), line, font=font, fill="white", stroke_width=6, stroke_fill="black")
+        
+    img.save(filename)
+    return filename
+
+# 6. Montage vidéo
 audio = AudioFileClip("audio.mp3")
 duration = audio.duration
 
-# Préparation de la vidéo de fond
 if os.path.exists("background.mp4"):
     bg_clip = VideoFileClip("background.mp4")
-    # Redimensionner et recadrer pour le format vertical 9:16
     bg_clip = bg_clip.resize(height=1920)
     if bg_clip.w < 1080:
         bg_clip = bg_clip.resize(width=1080)
@@ -75,10 +102,8 @@ else:
         bg_clip = bg_clip.resize(width=1080)
     bg_clip = bg_clip.crop(x_center=bg_clip.w/2, y_center=bg_clip.h/2, width=1080, height=1920)
 
-# Boucler ou couper la vidéo pour qu'elle dure exactement le temps de l'audio
 bg_clip = bg_clip.loop(duration=duration)
 
-# Création des sous-titres (Découpage en phrases)
 sentences = script_text.replace('\n', ' ').split('. ')
 words = script_text.split()
 time_per_word = duration / len(words)
@@ -89,24 +114,22 @@ current_time = 0
 for sentence in sentences:
     if not sentence.strip():
         continue
-    # Envelopper le texte pour qu'il tienne à l'écran
+    
     wrapped_text = textwrap.fill(sentence.strip() + ".", width=20)
     word_count = len(sentence.split())
     sentence_duration = word_count * time_per_word
     
-    # Création du clip de texte avec la police Linux
-    txt_clip = TextClip(wrapped_text, fontsize=70, color='white', font='DejaVu-Sans-Bold', 
-                        stroke_color='black', stroke_width=3, method='caption', size=(900, None))
-    txt_clip = txt_clip.set_position(('center', 'center')).set_start(current_time).set_duration(sentence_duration)
+    # Utilisation de Pillow pour générer le texte au lieu de TextClip
+    text_img_file = create_text_image(wrapped_text)
+    txt_clip = ImageClip(text_img_file).set_start(current_time).set_duration(sentence_duration)
     subtitles.append(txt_clip)
     
     current_time += sentence_duration
 
-# Assemblage final
 video = CompositeVideoClip([bg_clip] + subtitles).set_audio(audio)
 video.write_videofile("short.mp4", fps=24, codec="libx264", audio_codec="aac", preset="ultrafast")
 
-# 6. Upload sur YouTube
+# 7. Upload sur YouTube
 creds = Credentials(
     None,
     refresh_token=REFRESH_TOKEN,
