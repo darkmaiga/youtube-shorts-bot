@@ -36,7 +36,7 @@ async def make_audio():
     await communicate.save("audio.mp3")
 asyncio.run(make_audio())
 
-# 4. Téléchargement de la vidéo de fond (Pixabay)
+# 4. Téléchargement de la vidéo de fond
 def get_background_video():
     keywords = ["finance", "money", "business", "office", "city"]
     query = random.choice(keywords)
@@ -58,14 +58,23 @@ if not get_background_video():
     with open("background.jpg", "wb") as handler:
         handler.write(img_data)
 
-# 5. Téléchargement de la musique de fond (libre de droits)
-# On utilise une URL directe vers un morceau d'ambiance corporate
-music_url = "https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0c6ff1bab.mp3?filename=corporate-motivation-110181.mp3"
-music_data = requests.get(music_url).content
-with open("music.mp3", "wb") as handler:
-    handler.write(music_data)
+# 5. Téléchargement de la musique de fond (avec un lien ultra stable)
+has_music = False
+try:
+    music_url = "https://assets.mixkit.co/music/preview/mixkit-tech-house-vibes-130.mp3"
+    headers = {'User-Agent': 'Mozilla/5.0'}
+    music_data = requests.get(music_url, headers=headers).content
+    if len(music_data) > 10000: # Vérifie que le fichier n'est pas vide
+        with open("music.mp3", "wb") as handler:
+            handler.write(music_data)
+        has_music = True
+        print("Musique téléchargée avec succès.")
+    else:
+        print("Le fichier musique est vide ou invalide. On continue sans.")
+except Exception as e:
+    print(f"Erreur de téléchargement de la musique : {e}. On continue sans.")
 
-# 6. Fonction pour créer une image de texte avec Pillow
+# 6. Fonction pour créer une image de texte
 def create_text_image(text, filename="temp_text.png"):
     img_width = 1080
     img_height = 1920
@@ -87,8 +96,6 @@ def create_text_image(text, filename="temp_text.png"):
         w = bbox[2] - bbox[0]
         x = (img_width - w) / 2
         y = y_start + i * (font_size + 20)
-        
-        # Dessiner le contour noir puis le texte blanc
         draw.text((x, y), line, font=font, fill="white", stroke_width=6, stroke_fill="black")
         
     img.save(filename)
@@ -98,7 +105,6 @@ def create_text_image(text, filename="temp_text.png"):
 voice_audio = AudioFileClip("audio.mp3")
 duration = voice_audio.duration
 
-# Préparation de la vidéo de fond
 if os.path.exists("background.mp4"):
     bg_clip = VideoFileClip("background.mp4")
     bg_clip = bg_clip.resize(height=1920)
@@ -111,21 +117,23 @@ else:
         bg_clip = bg_clip.resize(width=1080)
     bg_clip = bg_clip.crop(x_center=bg_clip.w/2, y_center=bg_clip.h/2, width=1080, height=1920)
 
-# On boucle la vidéo pour qu'elle dure le temps de l'audio
 bg_clip = bg_clip.loop(duration=duration)
-
-# 👉 APPLICATION DU FILTRE SOMBRE (On réduit la luminosité à 60%)
+# Application du filtre sombre
 bg_clip = bg_clip.fx(vfx.colorx, 0.6)
 
-# Préparation de la musique de fond
-music = AudioFileClip("music.mp3")
-# On boucle la musique et on baisse son volume à 10% (0.1) pour ne pas couvrir la voix
-music = music.loop(duration=duration).volumex(0.1)
+# Gestion de l'audio final
+if has_music:
+    try:
+        music = AudioFileClip("music.mp3")
+        music = music.loop(duration=duration).volumex(0.1)
+        final_audio = CompositeAudioClip([voice_audio, music])
+    except Exception as e:
+        print("Erreur lors de l'ajout de la musique, audio normal utilisé.")
+        final_audio = voice_audio
+else:
+    final_audio = voice_audio
 
-# On mélange la voix et la musique
-final_audio = CompositeAudioClip([voice_audio, music])
-
-# Création des sous-titres
+# Sous-titres
 sentences = script_text.replace('\n', ' ').split('. ')
 words = script_text.split()
 time_per_word = duration / len(words)
@@ -144,21 +152,13 @@ for sentence in sentences:
     text_img_file = create_text_image(wrapped_text)
     txt_clip = ImageClip(text_img_file).set_start(current_time).set_duration(sentence_duration)
     subtitles.append(txt_clip)
-    
     current_time += sentence_duration
 
-# Assemblage final
 video = CompositeVideoClip([bg_clip] + subtitles).set_audio(final_audio)
 video.write_videofile("short.mp4", fps=24, codec="libx264", audio_codec="aac", preset="ultrafast")
 
-# 8. Upload sur YouTube
-creds = Credentials(
-    None,
-    refresh_token=REFRESH_TOKEN,
-    token_uri="https://oauth2.googleapis.com/token",
-    client_id=CLIENT_ID,
-    client_secret=CLIENT_SECRET
-)
+# 8. Upload
+creds = Credentials(None, refresh_token=REFRESH_TOKEN, token_uri="https://oauth2.googleapis.com/token", client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
 youtube = build('youtube', 'v3', credentials=creds)
 
 body = {
@@ -168,10 +168,7 @@ body = {
         'tags': ['finance', 'money', 'shorts'],
         'categoryId': '27'
     },
-    'status': {
-        'privacyStatus': 'public',
-        'selfDeclaredMadeForKids': False
-    }
+    'status': {'privacyStatus': 'public', 'selfDeclaredMadeForKids': False}
 }
 
 media = MediaFileUpload("short.mp4", mimetype='video/mp4', resumable=True)
