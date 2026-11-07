@@ -31,42 +31,37 @@ TOPICS = [
     "The danger of lifestyle inflation when you get a raise",
     "How to start investing with only 50 dollars",
     "The difference between assets and liabilities",
-    "Why student loans are a trap and how to pay them off faster",
-    "How to negotiate your salary and get paid what you are worth",
-    "The psychological tricks stores use to make you spend money"
+    "Why student loans are a trap and how to pay them off faster"
 ]
 chosen_topic = random.choice(TOPICS)
-print(f"Sujet choisi : {chosen_topic}")
 
-# 3. Génération du script
+# 3. Génération du script (Ajusté pour 1 minute - environ 170 mots)
 genai.configure(api_key=GEMINI_KEY)
 model = genai.GenerativeModel('gemini-3.1-flash-lite')
-
 prompt = f"""
-You are a strict, professional, and highly experienced financial advisor. 
-Write a hard-hitting, problem-solving script about this specific topic: "{chosen_topic}".
-Follow this exact structure: 1. Strong hook. 2. The problem. 3. Actionable steps. 4. Call to action.
-Rules: around 120-140 words. English. ONLY the spoken text. No formatting, no visual cues.
+You are a strict, professional financial advisor. 
+Write a hard-hitting script about: "{chosen_topic}".
+Structure: 1. Hook. 2. The problem explained deeply. 3. Actionable steps to solve it. 4. Strong call to action.
+Rules: Between 160 and 180 words (to make a 1-minute to 1-minute 20 video). English. ONLY the spoken text.
 """
 script_text = model.generate_content(prompt).text.strip()
 print(f"Script généré :\n{script_text}\n")
 
-# 4. Création de la voix off (On récupère les timings précis des mots)
+# 4. Création de la voix off
 async def make_audio():
     communicate = edge_tts.Communicate(script_text, "en-US-ChristopherNeural")
     await communicate.save("audio.mp3")
 asyncio.run(make_audio())
 
-# 5. Téléchargement d'une vidéo de fond
+# 5. Téléchargement d'une vidéo de fond (HD)
 def get_background_video(topic):
-    if "debt" in topic.lower(): query = "debt stress"
-    elif "crypto" in topic.lower(): query = "crypto trading"
-    elif "car" in topic.lower(): query = "luxury car"
-    elif "inflation" in topic.lower(): query = "inflation economy"
-    elif "invest" in topic.lower(): query = "stock market"
-    else: query = "money finance"
+    if "debt" in topic.lower(): query = "business stress"
+    elif "crypto" in topic.lower(): query = "crypto bitcoin"
+    elif "car" in topic.lower(): query = "luxury car driving"
+    elif "budget" in topic.lower(): query = "calculator money"
+    else: query = "city finance"
     
-    url = f"https://pixabay.com/api/videos/?key={PIXABAY_KEY}&q={query}&video_type=film&orientation=vertical&per_page=5"
+    url = f"https://pixabay.com/api/videos/?key={PIXABAY_KEY}&q={query}&video_type=film&orientation=vertical&per_page=10&min_height=1920"
     response = requests.get(url).json()
     
     if response.get('hits'):
@@ -85,7 +80,7 @@ if not get_background_video(chosen_topic):
 # 6. Téléchargement de la musique de fond
 has_music = False
 try:
-    music_url = "https://assets.mixkit.co/music/preview/mixkit-tech-house-vibes-130.mp3"
+    music_url = "https://cdn.pixabay.com/audio/2022/05/27/audio_1808fbf07a.mp3"
     headers = {'User-Agent': 'Mozilla/5.0'}
     music_data = requests.get(music_url, headers=headers).content
     if len(music_data) > 10000: 
@@ -95,7 +90,7 @@ try:
 except Exception as e:
     print(f"Erreur musique : {e}")
 
-# 7. Téléchargement d'une belle police (Montserrat ExtraBold)
+# 7. Téléchargement de la police
 font_url = "https://github.com/google/fonts/raw/main/ofl/montserrat/Montserrat%5Bwght%5D.ttf"
 try:
     font_data = requests.get(font_url).content
@@ -103,30 +98,29 @@ try:
         f.write(font_data)
     font_path = "Montserrat.ttf"
 except:
-    font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" # Fallback
+    font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 
-# 8. Fonction pour créer l'image d'un mot
-def create_word_image(word, filename="temp_word.png"):
+# 8. Fonction pour créer l'image d'un bloc de mots (Texte JAUNE)
+def create_word_image(text, filename="temp_word.png"):
     img_width = 1080
     img_height = 300
     img = Image.new('RGBA', (img_width, img_height), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     
-    font_size = 100 # Grosse police
+    font_size = 90
     try:
         font = ImageFont.truetype(font_path, font_size)
     except IOError:
         font = ImageFont.load_default()
         
-    # Centrer le mot
-    bbox = draw.textbbox((0, 0), word, font=font)
+    bbox = draw.textbbox((0, 0), text, font=font)
     w = bbox[2] - bbox[0]
     h = bbox[3] - bbox[1]
     x = (img_width - w) / 2
     y = (img_height - h) / 2
         
-    # Texte blanc avec un gros contour noir (très lisible)
-    draw.text((x, y), word, font=font, fill="white", stroke_width=10, stroke_fill="black")
+    # Texte JAUNE (Couleur or) avec contour noir
+    draw.text((x, y), text, font=font, fill="#FFD700", stroke_width=8, stroke_fill="black")
     img.save(filename)
     return filename
 
@@ -136,16 +130,17 @@ duration = voice_audio.duration
 
 if os.path.exists("background.mp4"):
     bg_clip = VideoFileClip("background.mp4")
+    # On force la boucle pour qu'elle ne s'arrête jamais avant l'audio
+    bg_clip = bg_clip.loop(duration=duration)
     bg_clip = bg_clip.resize(height=1920)
     if bg_clip.w < 1080: bg_clip = bg_clip.resize(width=1080)
     bg_clip = bg_clip.crop(x_center=bg_clip.w/2, y_center=bg_clip.h/2, width=1080, height=1920)
 else:
-    bg_clip = ImageClip("background.jpg").resize(height=1920)
+    bg_clip = ImageClip("background.jpg").set_duration(duration).resize(height=1920)
     if bg_clip.w < 1080: bg_clip = bg_clip.resize(width=1080)
     bg_clip = bg_clip.crop(x_center=bg_clip.w/2, y_center=bg_clip.h/2, width=1080, height=1920)
 
-bg_clip = bg_clip.loop(duration=duration)
-bg_clip = bg_clip.fx(vfx.colorx, 0.5) # Filtre encore plus sombre (0.5) pour faire ressortir le texte
+bg_clip = bg_clip.fx(vfx.colorx, 0.5) # Filtre sombre pour faire ressortir le texte
 
 if has_music:
     try:
@@ -156,41 +151,27 @@ if has_music:
 else:
     final_audio = voice_audio
 
-# 10. Découpage Mot par Mot (Le fameux style Karaoké)
+# 10. Découpage en blocs de 3 mots (Style Karaoké)
 words = script_text.replace('\n', ' ').split()
-time_per_word = duration / len(words)
+chunks = [" ".join(words[i:i+3]) for i in range(0, len(words), 3)]
+time_per_chunk = duration / len(chunks)
 
 subtitles = []
 current_time = 0
 
-for i in range(len(words)):
-    # On affiche le mot actuel, et parfois le mot suivant pour que ça se lise bien
-    if i < len(words) - 1 and len(words[i]) < 5:
-        text_to_show = f"{words[i]} {words[i+1]}" # Si le mot est court, on l'affiche avec le suivant
-        display_duration = time_per_word * 2
-        # (On saute le mot suivant dans la boucle pour ne pas le répéter)
-        words[i+1] = "" 
-    else:
-        text_to_show = words[i]
-        display_duration = time_per_word
-
-    if text_to_show.strip() == "":
-        continue
-
-    # Création de l'image pour ce mot
-    text_img_file = f"word_{i}.png"
-    create_word_image(text_to_show.upper(), text_img_file) # ON MET TOUT EN MAJUSCULES
+for i, chunk in enumerate(chunks):
+    text_img_file = f"chunk_{i}.png"
+    create_word_image(chunk.upper(), text_img_file)
     
-    # On place le texte en haut (y=400 au lieu du centre à 960)
-    txt_clip = ImageClip(text_img_file).set_position(('center', 400)).set_start(current_time).set_duration(display_duration)
+    txt_clip = ImageClip(text_img_file).set_position(('center', 500)).set_start(current_time).set_duration(time_per_chunk)
     subtitles.append(txt_clip)
-    
-    current_time += display_duration
+    current_time += time_per_chunk
 
-# 11. Assemblage et Publication
+# 11. Assemblage
 video = CompositeVideoClip([bg_clip] + subtitles).set_audio(final_audio)
 video.write_videofile("short.mp4", fps=24, codec="libx264", audio_codec="aac", preset="ultrafast")
 
+# 12. Upload
 creds = Credentials(None, refresh_token=REFRESH_TOKEN, token_uri="https://oauth2.googleapis.com/token", client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
 youtube = build('youtube', 'v3', credentials=creds)
 
